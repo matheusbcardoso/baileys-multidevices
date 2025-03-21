@@ -3,7 +3,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 // Configuração para o Baileys
-global.crypto = require('crypto');
+//global.crypto = require('crypto');
 global.WebSocket = require('ws');
 global.fetch = require('node-fetch');
 global.performance = require('perf_hooks').performance;
