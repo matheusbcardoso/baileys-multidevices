@@ -2,6 +2,8 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+// Adicionar polyfill para crypto
+global.crypto = require('crypto');
 const { default: makeWASocket, DisconnectReason, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 const QRCode = require('qrcode');
 const fs = require('fs');
