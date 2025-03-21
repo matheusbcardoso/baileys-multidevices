@@ -197,6 +197,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Buscar QR Code para um dispositivo
     function fetchQRCode(deviceId) {
+        // Mostrar mensagem de carregamento
+        qrcodeElement.innerHTML = '<div class="text-center"><div class="spinner-border text-success" role="status"></div><p class="mt-2">Gerando QR Code...</p></div>';
+        
         fetch(`/api/devices/${deviceId}/qrcode`)
             .then(res => res.json())
             .then(data => {
@@ -205,10 +208,22 @@ document.addEventListener('DOMContentLoaded', function() {
                     const img = document.createElement('img');
                     img.src = data.qrcode;
                     qrcodeElement.appendChild(img);
+                } else if (data.connected) {
+                    qrcodeElement.innerHTML = '<div class="alert alert-success">Dispositivo já está conectado!</div>';
+                } else if (data.retry) {
+                    // Se precisar tentar novamente, aguarda 3 segundos e tenta de novo
+                    qrcodeElement.innerHTML = `<div class="text-center"><div class="spinner-border text-success" role="status"></div><p class="mt-2">${data.message}</p></div>`;
+                    setTimeout(() => fetchQRCode(deviceId), 3000);
+                } else {
+                    qrcodeElement.innerHTML = '<div class="alert alert-warning">QR Code não disponível. Tente reconectar o dispositivo.</div>';
                 }
             })
             .catch(err => {
                 console.error('Erro ao obter QR Code:', err);
+                qrcodeElement.innerHTML = '<div class="alert alert-danger">Erro ao obter QR Code. Tente novamente.</div>';
+                
+                // Tentar novamente após 5 segundos
+                setTimeout(() => fetchQRCode(deviceId), 5000);
             });
     }
     

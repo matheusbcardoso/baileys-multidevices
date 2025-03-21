@@ -47,116 +47,126 @@ const connections = {};
 
 // Função para iniciar a conexão com o WhatsApp
 async function connectToWhatsApp(deviceId, deviceName) {
-    // Criar pasta para a sessão específica do dispositivo
-    const sessionDir = path.join(SESSIONS_DIR, deviceId);
-    if (!fs.existsSync(sessionDir)) {
-        fs.mkdirSync(sessionDir, { recursive: true });
-    }
-    
-    const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-    
-    // Configuração do logger
-    const logger = pino({ level: 'silent' });
-    
-    // Criar conexão
-    const sock = makeWASocket({
-        printQRInTerminal: true,
-        auth: state,
-        logger,
-        browser: ['WhatsApp Integration', 'Chrome', '10.0'],
-        syncFullHistory: false
-    });
-    
-    // Armazenar a conexão
-    connections[deviceId] = {
-        socket: sock,
-        qrCode: '',
-        isConnected: false,
-        name: deviceName
-    };
-    
-    // Evento de atualização de conexão
-    sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect, qr } = update;
-        
-        if (qr) {
-            // Gerar QR code como string base64
-            connections[deviceId].qrCode = await QRCode.toDataURL(qr);
-            io.emit('device-qr', { deviceId, qrCode: connections[deviceId].qrCode });
-            console.log(`QR Code gerado para dispositivo ${deviceId}`);
+    try {
+        // Criar pasta para a sessão específica do dispositivo
+        const sessionDir = path.join(SESSIONS_DIR, deviceId);
+        if (!fs.existsSync(sessionDir)) {
+            fs.mkdirSync(sessionDir, { recursive: true });
         }
         
-        if (connection === 'close') {
-            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log(`Conexão fechada para dispositivo ${deviceId} devido a `, lastDisconnect?.error);
-            connections[deviceId].isConnected = false;
+        const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
+        
+        // Configuração do logger
+        const logger = pino({ level: 'warn' });
+        
+        // Criar conexão
+        const sock = makeWASocket({
+            printQRInTerminal: true,
+            auth: state,
+            logger,
+            browser: ['WhatsApp Integration', 'Chrome', '10.0'],
+            syncFullHistory: false,
+            connectTimeoutMs: 60000,
+            qrTimeout: 60000,
+            defaultQueryTimeoutMs: 60000
+        });
+        
+        // Armazenar a conexão
+        connections[deviceId] = {
+            socket: sock,
+            qrCode: '',
+            isConnected: false,
+            name: deviceName,
+            reconnecting: false
+        };
+        
+        // Evento de atualização de conexão
+        sock.ev.on('connection.update', async (update) => {
+            const { connection, lastDisconnect, qr } = update;
             
-            // Atualizar status no banco de dados
-            db.devices.updateDeviceStatus(deviceId, 'disconnected');
-            
-            // Emitir evento para o frontend
-            io.emit('device-status', { deviceId, connected: false });
-            
-            if (shouldReconnect) {
-                connectToWhatsApp(deviceId, deviceName);
-            }
-        } else if (connection === 'open') {
-            console.log(`Conexão aberta para dispositivo ${deviceId}`);
-            connections[deviceId].isConnected = true;
-            
-            // Obter informações do telefone
-            const phoneNumber = sock.user?.id?.split(':')[0] || '';
-            
-            // Atualizar status no banco de dados
-            db.devices.updateDeviceStatus(deviceId, 'connected', phoneNumber);
-            
-            // Emitir evento para o frontend
-            io.emit('device-status', { 
-                deviceId, 
-                connected: true,
-                phoneNumber
-            });
-        }
-    });
-    
-    // Salvar credenciais quando atualizadas
-    sock.ev.on('creds.update', saveCreds);
-    
-    // Evento para receber mensagens
-    sock.ev.on('messages.upsert', async (m) => {
-        if (m.type === 'notify') {
-            for (const msg of m.messages) {
-                if (!msg.key.fromMe && msg.message) {
-                    const sender = msg.key.remoteJid;
-                    const messageContent = msg.message.conversation || 
-                                          (msg.message.extendedTextMessage && msg.message.extendedTextMessage.text) || 
-                                          (msg.message.imageMessage && msg.message.imageMessage.caption) || 
-                                          'Mídia recebida';
-                    
-                    console.log(`Nova mensagem para ${deviceId} de ${sender}: ${messageContent}`);
-                    
-                    // Salvar mensagem no banco de dados
-                    db.messages.addMessage(
-                        deviceId,
-                        'incoming',
-                        sender,
-                        sock.user.id,
-                        messageContent
-                    );
-                    
-                    // Emitir evento para o frontend
-                    io.emit('new-message', {
-                        deviceId,
-                        sender,
-                        message: messageContent,
-                        timestamp: new Date().toISOString()
-                    });
+            if (qr) {
+                try {
+                    // Gerar QR code como string base64
+                    connections[deviceId].qrCode = await QRCode.toDataURL(qr);
+                    io.emit('device-qr', { deviceId, qrCode: connections[deviceId].qrCode });
+                    console.log(`QR Code gerado para dispositivo ${deviceId}`);
+                } catch (error) {
+                    console.error('Erro ao gerar QR code:', error);
                 }
             }
-        }
-    });
-    
-    return sock;
+            
+            if (connection === 'close') {
+                const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+                console.log(`Conexão fechada para dispositivo ${deviceId} devido a `, lastDisconnect?.error);
+                connections[deviceId].isConnected = false;
+                
+                // Atualizar status no banco de dados
+                db.devices.updateDeviceStatus(deviceId, 'disconnected');
+                
+                // Emitir evento para o frontend
+                io.emit('device-status', { deviceId, connected: false });
+                
+                if (shouldReconnect) {
+                    connectToWhatsApp(deviceId, deviceName);
+                }
+            } else if (connection === 'open') {
+                console.log(`Conexão aberta para dispositivo ${deviceId}`);
+                connections[deviceId].isConnected = true;
+                
+                // Obter informações do telefone
+                const phoneNumber = sock.user?.id?.split(':')[0] || '';
+                
+                // Atualizar status no banco de dados
+                db.devices.updateDeviceStatus(deviceId, 'connected', phoneNumber);
+                
+                // Emitir evento para o frontend
+                io.emit('device-status', { 
+                    deviceId, 
+                    connected: true,
+                    phoneNumber
+                });
+            }
+        });
+        
+        // Salvar credenciais quando atualizadas
+        sock.ev.on('creds.update', saveCreds);
+        
+        // Evento para receber mensagens
+        sock.ev.on('messages.upsert', async (m) => {
+            if (m.type === 'notify') {
+                for (const msg of m.messages) {
+                    if (!msg.key.fromMe && msg.message) {
+                        const sender = msg.key.remoteJid;
+                        const messageContent = msg.message.conversation || 
+                                              (msg.message.extendedTextMessage && msg.message.extendedTextMessage.text) || 
+                                              (msg.message.imageMessage && msg.message.imageMessage.caption) || 
+                                              'Mídia recebida';
+                        
+                        console.log(`Nova mensagem para ${deviceId} de ${sender}: ${messageContent}`);
+                        
+                        // Salvar mensagem no banco de dados
+                        db.messages.addMessage(
+                            deviceId,
+                            'incoming',
+                            sender,
+                            sock.user.id,
+                            messageContent
+                        );
+                        
+                        // Emitir evento para o frontend
+                        io.emit('new-message', {
+                            deviceId,
+                            sender,
+                            message: messageContent,
+                            timestamp: new Date().toISOString()
+                        });
+                    }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Erro ao conectar ao WhatsApp:', error);
+    }
 }
 
 // Rota principal
@@ -243,20 +253,70 @@ app.delete('/api/devices/:id', (req, res) => {
     res.json({ success: true, message: 'Dispositivo removido com sucesso' });
 });
 
-app.get('/api/devices/:id/qrcode', (req, res) => {
-    const { id } = req.params;
-    
-    // Verificar se o dispositivo existe
-    const device = db.devices.getDeviceById(id);
-    if (!device) {
-        return res.status(404).json({ success: false, message: 'Dispositivo não encontrado' });
-    }
-    
-    // Verificar se há QR code disponível
-    if (connections[id] && connections[id].qrCode && !connections[id].isConnected) {
-        res.json({ qrcode: connections[id].qrCode });
-    } else {
-        res.status(404).json({ message: 'QR Code não disponível' });
+app.get('/api/devices/:id/qrcode', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        // Verificar se o dispositivo existe
+        const device = db.devices.getDeviceById(id);
+        if (!device) {
+            return res.status(404).json({ success: false, message: 'Dispositivo não encontrado' });
+        }
+        
+        // Verificar se há QR code disponível
+        if (connections[id]) {
+            if (connections[id].isConnected) {
+                return res.json({ success: true, connected: true, message: 'Dispositivo já está conectado' });
+            }
+            
+            if (connections[id].qrCode) {
+                return res.json({ success: true, qrcode: connections[id].qrCode });
+            } else {
+                // Se não há QR code, tenta reconectar o dispositivo
+                if (!connections[id].reconnecting) {
+                    connections[id].reconnecting = true;
+                    console.log(`Tentando reconectar dispositivo ${id} para gerar QR code`);
+                    
+                    // Forçar reconexão para gerar novo QR code
+                    if (connections[id].socket) {
+                        try {
+                            await connections[id].socket.logout();
+                        } catch (error) {
+                            console.log('Erro ao desconectar:', error);
+                        }
+                    }
+                    
+                    // Remover pasta da sessão para forçar novo QR code
+                    const sessionDir = path.join(SESSIONS_DIR, id);
+                    if (fs.existsSync(sessionDir)) {
+                        fs.rmSync(sessionDir, { recursive: true, force: true });
+                    }
+                    
+                    // Iniciar nova conexão
+                    setTimeout(() => {
+                        connectToWhatsApp(id, device.name);
+                        connections[id].reconnecting = false;
+                    }, 1000);
+                }
+                
+                return res.status(202).json({ 
+                    success: true, 
+                    message: 'Gerando novo QR code, tente novamente em alguns segundos',
+                    retry: true 
+                });
+            }
+        } else {
+            // Se não há conexão, inicia uma nova
+            connectToWhatsApp(id, device.name);
+            return res.status(202).json({ 
+                success: true, 
+                message: 'Iniciando conexão, tente novamente em alguns segundos',
+                retry: true 
+            });
+        }
+    } catch (error) {
+        console.error('Erro ao obter QR code:', error);
+        return res.status(500).json({ success: false, message: 'Erro ao obter QR code' });
     }
 });
 
