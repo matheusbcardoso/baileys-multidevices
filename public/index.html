@@ -16,9 +16,14 @@
                     <span id="user-greeting"><i class="bi bi-person-circle me-1"></i> Olá, <span id="username-display">Usuário</span></span>
                 </div>
                 <h1 class="text-center flex-grow-1">Integração WhatsApp Multi-Dispositivos</h1>
-                <a href="/logout" id="logout-btn" class="btn btn-outline-danger">
-                    <i class="bi bi-box-arrow-right me-1"></i> Logout
-                </a>
+                <div class="d-flex align-items-center">
+                    <div id="connection-status" class="me-3">
+                        <span class="badge bg-warning">Conectando...</span>
+                    </div>
+                    <a href="/logout" id="logout-btn" class="btn btn-outline-danger">
+                        <i class="bi bi-box-arrow-right me-1"></i> Logout
+                    </a>
+                </div>
             </div>
             <div class="col-12 text-center">
                 <p class="text-muted">Gerencie múltiplos dispositivos WhatsApp em uma única interface</p>

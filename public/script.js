@@ -54,10 +54,25 @@ document.addEventListener('DOMContentLoaded', function() {
     // Adicionar handlers de eventos para conexão
     socket.on('connect', () => {
         console.log('Socket conectado');
+        document.getElementById('connection-status').innerHTML = '<span class="badge bg-success">Conectado</span>';
+        
+        // Recarregar dispositivos quando reconectar
+        loadDevices();
     });
     
     socket.on('connect_error', (error) => {
         console.error('Erro de conexão:', error);
+        document.getElementById('connection-status').innerHTML = '<span class="badge bg-danger">Desconectado</span>';
+        
+        // Tentar reconectar após 5 segundos
+        setTimeout(() => {
+            socket.connect();
+        }, 5000);
+    });
+    
+    socket.on('disconnect', (reason) => {
+        console.log('Socket desconectado:', reason);
+        document.getElementById('connection-status').innerHTML = '<span class="badge bg-warning">Reconectando...</span>';
     });
     
     // Dispositivo selecionado atualmente
@@ -388,27 +403,57 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Carregar histórico de mensagens
     function loadMessageHistory(deviceId) {
+        console.log(`Carregando histórico de mensagens para dispositivo ${deviceId}`);
+        
+        // Mostrar indicador de carregamento
+        messageHistory.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">Carregando mensagens...</p></div>';
+        
         fetch(`/api/messages?deviceId=${deviceId}`)
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) {
+                    throw new Error(`Erro HTTP: ${res.status}`);
+                }
+                return res.json();
+            })
             .then(data => {
+                console.log(`Recebidos dados do histórico:`, data);
                 messageHistory.innerHTML = '';
                 
-                if (data.length === 0) {
-                    messageHistory.innerHTML = '<p class="text-center text-muted">Nenhuma mensagem recebida</p>';
+                if (!Array.isArray(data) || data.length === 0) {
+                    console.log('Nenhuma mensagem encontrada');
+                    messageHistory.innerHTML = '<p class="text-center text-muted py-4">Nenhuma mensagem recebida</p>';
                     return;
                 }
                 
+                console.log(`Processando ${data.length} mensagens`);
+                
+                // Ordenar mensagens por data
+                data.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+                
                 // Adicionar mensagens ao histórico
-                data.forEach(msg => {
+                data.forEach((msg, index) => {
+                    console.log(`Processando mensagem ${index + 1}/${data.length}:`, msg);
                     addMessageToHistory(msg);
                 });
                 
                 // Rolar para o final
                 messageHistory.scrollTop = messageHistory.scrollHeight;
+                
+                console.log(`Carregadas ${data.length} mensagens para o dispositivo ${deviceId}`);
             })
             .catch(err => {
                 console.error('Erro ao carregar histórico de mensagens:', err);
-                messageHistory.innerHTML = '<p class="text-center text-danger">Erro ao carregar mensagens</p>';
+                messageHistory.innerHTML = `
+                    <div class="alert alert-danger text-center my-3">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        Erro ao carregar mensagens
+                        <div class="mt-2">
+                            <button class="btn btn-sm btn-outline-danger" onclick="loadMessageHistory('${deviceId}')">
+                                <i class="bi bi-arrow-clockwise me-1"></i> Tentar novamente
+                            </button>
+                        </div>
+                    </div>
+                `;
             });
     }
     
@@ -422,35 +467,84 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Limpar histórico de mensagens
     clearHistoryBtn.addEventListener('click', () => {
-        messageHistory.innerHTML = '<p class="text-center text-muted">Nenhuma mensagem recebida</p>';
+        if (currentDeviceId) {
+            if (confirm('Deseja realmente limpar o histórico de mensagens?')) {
+                fetch(`/api/clear-messages?deviceId=${currentDeviceId}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            messageHistory.innerHTML = '<p class="text-center text-muted py-4">Nenhuma mensagem recebida</p>';
+                            showToast('Histórico de mensagens limpo', 'info');
+                        } else {
+                            showToast('Erro ao limpar histórico', 'danger');
+                        }
+                    })
+                    .catch(err => {
+                        console.error('Erro ao limpar histórico:', err);
+                        showToast('Erro ao limpar histórico', 'danger');
+                    });
+            }
+        }
     });
     
     // Adicionar mensagem ao histórico
     function addMessageToHistory(msg) {
-        const messageItem = document.createElement('div');
-        messageItem.className = 'message-item';
-        
-        // Determinar se é mensagem de entrada ou saída
-        const isIncoming = msg.direction === 'incoming';
-        
-        // Formatar número de telefone para exibição
-        let displaySender = isIncoming ? msg.sender : msg.recipient;
-        displaySender = formatPhoneNumber(displaySender.split('@')[0]);
-        
-        // Formatar data
-        const date = new Date(msg.timestamp);
-        const formattedDate = `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
-        
-        messageItem.innerHTML = `
-            <div class="d-flex justify-content-between align-items-start">
-                <div class="sender">${isIncoming ? displaySender : 'Você para ' + displaySender}</div>
-                <span class="badge ${isIncoming ? 'bg-primary' : 'bg-success'}">${isIncoming ? 'Recebida' : 'Enviada'}</span>
-            </div>
-            <div class="timestamp">${formattedDate}</div>
-            <div class="content">${msg.content}</div>
-        `;
-        
-        messageHistory.appendChild(messageItem);
+        try {
+            console.log('Adicionando mensagem ao histórico:', msg);
+            
+            const messageItem = document.createElement('div');
+            messageItem.className = 'message-item';
+            
+            // Determinar se é mensagem de entrada ou saída
+            const isIncoming = msg.direction === 'incoming';
+            
+            // Formatar número de telefone para exibição
+            let displaySender = isIncoming ? msg.sender : msg.recipient;
+            
+            // Verificar se o número está no formato correto
+            if (displaySender && typeof displaySender === 'string') {
+                displaySender = formatPhoneNumber(displaySender.split('@')[0]);
+            } else {
+                displaySender = 'Desconhecido';
+            }
+            
+            // Formatar data
+            let formattedDate = 'Data desconhecida';
+            try {
+                if (msg.timestamp) {
+                    const date = new Date(msg.timestamp);
+                    formattedDate = `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
+                }
+            } catch (dateError) {
+                console.warn('Erro ao formatar data:', dateError);
+            }
+            
+            // Verificar se o conteúdo da mensagem existe
+            const messageContent = msg.message || msg.content || 'Sem conteúdo';
+            
+            messageItem.innerHTML = `
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="sender">${isIncoming ? displaySender : 'Você para ' + displaySender}</div>
+                    <span class="badge ${isIncoming ? 'bg-primary' : 'bg-success'}">${isIncoming ? 'Recebida' : 'Enviada'}</span>
+                </div>
+                <div class="timestamp">${formattedDate}</div>
+                <div class="content">${messageContent}</div>
+            `;
+            
+            messageHistory.appendChild(messageItem);
+        } catch (error) {
+            console.error('Erro ao adicionar mensagem ao histórico:', error, msg);
+            // Adicionar uma mensagem de erro no histórico
+            const errorItem = document.createElement('div');
+            errorItem.className = 'message-item error';
+            errorItem.innerHTML = `
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    Erro ao exibir mensagem
+                </div>
+            `;
+            messageHistory.appendChild(errorItem);
+        }
     }
     
     // Formatar número de telefone
@@ -541,6 +635,34 @@ document.addEventListener('DOMContentLoaded', function() {
         toast.addEventListener('hidden.bs.toast', () => {
             toast.remove();
         });
+    }
+    
+    // Adicionar botão para mensagens de teste
+    const deviceActions = document.querySelector('.device-actions');
+    if (deviceActions) {
+        const testMessageBtn = document.createElement('button');
+        testMessageBtn.className = 'btn btn-sm btn-outline-secondary ms-2';
+        testMessageBtn.innerHTML = '<i class="bi bi-bug"></i> Adicionar Mensagem Teste';
+        testMessageBtn.onclick = function() {
+            if (currentDeviceId) {
+                fetch(`/api/test-message?deviceId=${currentDeviceId}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            showToast('Mensagem de teste adicionada', 'success');
+                            // Recarregar histórico após um breve delay
+                            setTimeout(() => loadMessageHistory(currentDeviceId), 500);
+                        } else {
+                            showToast('Erro ao adicionar mensagem de teste', 'danger');
+                        }
+                    })
+                    .catch(err => {
+                        console.error('Erro ao adicionar mensagem de teste:', err);
+                        showToast('Erro ao adicionar mensagem de teste', 'danger');
+                    });
+            }
+        };
+        deviceActions.appendChild(testMessageBtn);
     }
     
     // Eventos do Socket.io
