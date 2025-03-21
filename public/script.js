@@ -43,9 +43,21 @@ document.addEventListener('DOMContentLoaded', function() {
     const socket = io({
         path: '/socket.io/',
         transports: ['polling', 'websocket'],
-        reconnectionAttempts: 5,
+        reconnectionAttempts: 10,
         reconnectionDelay: 1000,
-        timeout: 20000
+        timeout: 60000,
+        forceNew: true,
+        upgrade: true,
+        rejectUnauthorized: false
+    });
+    
+    // Adicionar handlers de eventos para conexão
+    socket.on('connect', () => {
+        console.log('Socket conectado');
+    });
+    
+    socket.on('connect_error', (error) => {
+        console.error('Erro de conexão:', error);
     });
     
     // Dispositivo selecionado atualmente

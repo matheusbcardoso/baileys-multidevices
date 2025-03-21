@@ -2,8 +2,11 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
-// Adicionar polyfill para crypto
+// Configuração para o Baileys
 global.crypto = require('crypto');
+global.WebSocket = require('ws');
+global.fetch = require('node-fetch');
+global.performance = require('perf_hooks').performance;
 const { default: makeWASocket, DisconnectReason, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 const QRCode = require('qrcode');
 const fs = require('fs');
@@ -22,7 +25,11 @@ const io = new Server(server, {
     },
     allowEIO3: true, // Compatibilidade com versões anteriores
     transports: ['polling', 'websocket'], // Garantir que polling esteja disponível
-    path: '/socket.io/' // Confirmar que o path está correto
+    path: '/socket.io/', // Confirmar que o path está correto
+    pingTimeout: 60000, // Aumentar timeout para evitar desconexões
+    pingInterval: 25000, // Intervalo de ping mais frequente
+    upgradeTimeout: 30000, // Tempo para upgrade de conexão
+    maxHttpBufferSize: 1e8 // Aumentar tamanho do buffer
 });
 
 // Pasta para armazenar as sessões
@@ -55,7 +62,9 @@ async function connectToWhatsApp(deviceId, deviceName) {
     const sock = makeWASocket({
         printQRInTerminal: true,
         auth: state,
-        logger
+        logger,
+        browser: ['WhatsApp Integration', 'Chrome', '10.0'],
+        syncFullHistory: false
     });
     
     // Armazenar a conexão
