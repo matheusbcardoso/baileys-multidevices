@@ -1,0 +1,19 @@
+{
+  "name": "whatsapp-integration",
+  "version": "1.0.0",
+  "description": "Ferramenta de integração com WhatsApp usando Baileys",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.5.0",
+    "better-sqlite3": "^11.9.1",
+    "express": "^4.18.2",
+    "pino": "^8.16.0",
+    "qrcode": "^1.5.3",
+    "socket.io": "^4.7.2",
+    "sqlite3": "^5.1.7",
+    "uuid": "^11.1.0"
+  }
+}

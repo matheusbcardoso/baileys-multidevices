@@ -1,0 +1,121 @@
+body {
+    background-color: #f8f9fa;
+}
+
+.card {
+    margin-bottom: 20px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+#qrcode img {
+    margin: 0 auto;
+    max-width: 100%;
+    height: auto;
+}
+
+.message-container {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.message-item {
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+    background-color: #f1f1f1;
+}
+
+.message-item .sender {
+    font-weight: bold;
+    color: #0d6efd;
+}
+
+.message-item .timestamp {
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+.message-item .content {
+    margin-top: 5px;
+}
+
+/* Estilos para dispositivos */
+.device-item {
+    cursor: pointer;
+    transition: background-color 0.2s;
+    border-left: 3px solid transparent;
+}
+
+.device-item:hover {
+    background-color: #f8f9fa;
+}
+
+.device-item.active {
+    background-color: #e9f0ff;
+    border-left-color: #0d6efd;
+}
+
+.device-item .device-name {
+    font-weight: 500;
+}
+
+.device-item .device-phone {
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+.device-item .device-status {
+    font-size: 0.75rem;
+}
+
+/* Status de conexão */
+.status-connected {
+    color: #198754;
+}
+
+.status-disconnected {
+    color: #dc3545;
+}
+
+.status-waiting {
+    color: #fd7e14;
+}
+
+/* Badges de status */
+.badge.bg-success {
+    background-color: #198754 !important;
+}
+
+.badge.bg-danger {
+    background-color: #dc3545 !important;
+}
+
+.badge.bg-warning {
+    background-color: #fd7e14 !important;
+}
+
+/* Mensagem de boas-vindas */
+#welcome-message {
+    color: #6c757d;
+    margin-top: 50px;
+}
+
+#welcome-message i {
+    opacity: 0.5;
+}
+
+/* Ajustes responsivos */
+@media (max-width: 768px) {
+    .container-fluid {
+        padding: 10px;
+    }
+    
+    .card {
+        margin-bottom: 15px;
+    }
+    
+    #device-actions button {
+        margin-bottom: 5px;
+        width: 100%;
+    }
+}
