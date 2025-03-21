@@ -12,7 +12,16 @@ const db = require('./database');
 // Configuração do Express
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+    cors: {
+        origin: "*", // Em produção, restrinja para seus domínios específicos
+        methods: ["GET", "POST"],
+        credentials: true
+    },
+    allowEIO3: true, // Compatibilidade com versões anteriores
+    transports: ['polling', 'websocket'], // Garantir que polling esteja disponível
+    path: '/socket.io/' // Confirmar que o path está correto
+});
 
 // Pasta para armazenar as sessões
 const SESSIONS_DIR = './sessions';

@@ -40,7 +40,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const refreshHistoryBtn = document.getElementById('refresh-history');
 
     // Conectar ao Socket.io
-    const socket = io();
+    const socket = io({
+        path: '/socket.io/',
+        transports: ['polling', 'websocket'],
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+        timeout: 20000
+    });
     
     // Dispositivo selecionado atualmente
     let currentDeviceId = null;
